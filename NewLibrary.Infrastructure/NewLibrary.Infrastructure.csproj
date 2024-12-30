@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="VersOne.Epub" Version="3.3.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\NewLibrary.Application\NewLibrary.Application.csproj" />
+    <ProjectReference Include="..\NewLibrary.Data\NewLibrary.Data.csproj" />
+    <ProjectReference Include="..\NewLibrary.Shared\NewLibrary.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

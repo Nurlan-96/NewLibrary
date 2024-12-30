@@ -1,0 +1,36 @@
+﻿namespace NewLibrary.Core.Constants
+{
+    public enum GenreEnum
+    {
+        Adventure=1,
+        Fantasy,
+        ScienceFiction,
+        Mystery,
+        Thriller,
+        Romance,
+        Horror,
+        HistoricalFiction,
+        Dystopian,
+        ContemporaryFiction,
+        MagicalRealism,
+        LiteraryFiction,
+        Biography,
+        Autobiography,
+        SelfHelp,
+        History,
+        Science,
+        Philosophy,
+        Travel,
+        TrueCrime,
+        Politics,
+        Business,
+        Religion,
+        Art,
+        Poetry,
+        Drama,
+        GraphicNovel,
+        YoungAdult,
+        Children,
+        ShortStory
+    }
+}
