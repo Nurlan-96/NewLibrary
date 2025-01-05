@@ -7,8 +7,8 @@ namespace NewLibrary.Application.Queries.BookQueries
     {
         Task<Pagination<BookEntity>> GetAllBooks(int page, int size);
         Task<BookEntity> GetBookById(int id);
-        Task<List<BookEntity>> GetBooksByGenreAsync(int genreId, int skip, int take);
-        Task<List<BookEntity>> GetBooksByAuthorAsync(int authorId, int skip, int take);
+        Task<Pagination<BookResponse>> GetBooksByGenreAsync(int genreId, int skip, int take);
+        Task<Pagination<BookResponse>> GetBooksByAuthorAsync(int id, int page, int size);
         Task<List<BookEntity>> GetBooksByPopularityAsync(int page, int size);
     }
 }

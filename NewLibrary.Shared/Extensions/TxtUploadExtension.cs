@@ -2,7 +2,7 @@
 
 namespace NewLibrary.Shared.Extensions
 {
-    public static class EPubUploadExtension
+    public static class TxtUploadExtension
     {
         public static async Task<string> UploadFileAsync(this IFormFile file, string uploadPath, long maxFileSizeInBytes, IHttpContextAccessor httpContextAccessor)
         {

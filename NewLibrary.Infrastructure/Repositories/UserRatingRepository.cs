@@ -5,7 +5,7 @@ using NewLibrary.Data.DAL;
 
 namespace NewLibrary.Infrastructure.Repositories
 {
-    public class AuthorRepository(AppDbContext context) : Repository<AuthorEntity>, IAuthorRepository
+    public class UserRatingRepository(AppDbContext context) : Repository<UserRating>, IUserRatingRepository
     {
         public sealed override DbContext Context { get; protected set; } = context;
     }

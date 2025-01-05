@@ -1,36 +1,43 @@
 ﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using NewLibrary.Application.Commands.BookCommands;
 using NewLibrary.Application.Repositories;
 using NewLibrary.Core.Entities;
 using NewLibrary.Data.DAL;
 using NewLibrary.Shared.Exceptions;
 using NewLibrary.Shared.Extensions;
+using System.Security.Claims;
+using System.Linq;
 
 namespace NewLibrary.Application.Services.BookServices
 {
-    public class BookService(AppDbContext context, IBookRepository bookRepository, IAuthorRepository authorRepository, IHttpContextAccessor httpContextAccessor, IEpubService epubService) : IBookService
+    public class BookService(AppDbContext context, IBookRepository bookRepository, IAuthorRepository authorRepository, IHttpContextAccessor httpContextAccessor, UserManager<AppUser> userManager, IUserRatingRepository userRatingRepository) : IBookService
     {
         private readonly AppDbContext _context = context;
         private readonly IBookRepository _bookRepo = bookRepository;
         private readonly IAuthorRepository _authorRepo = authorRepository;
         private readonly IHttpContextAccessor _httpContextAccessor = httpContextAccessor;
-        private readonly IEpubService _epubService = epubService;
+        private readonly UserManager<AppUser> _userManager = userManager;
+        private readonly IUserRatingRepository _userRatingRepo = userRatingRepository;
+
+        private async Task<int> GetTxtPageCountAsync(string filePath)
+        {
+            var lines = await File.ReadAllLinesAsync(filePath);
+            return lines.Length;
+        }
 
         public async Task<bool> CreateBook(CreateBookCommand command)
         {
-            // Validate the author exists
             var author = await _authorRepo.GetAsync(x => x.Id == command.AuthorId)
                 ?? throw new EntityNotFoundException<AuthorEntity>();
 
-            // Define directories and limits
             string imageFolder = Path.Combine("wwwroot", "img", "books");
             string contentFolder = Path.Combine("wwwroot", "contents");
-            long maxImageFileSize = 1 * 1024 * 1024; // 1 MB
-            long maxContentFileSize = 10 * 1024 * 1024; // 10 MB (adjust as needed)
+            long maxImageFileSize = 1 * 1024 * 1024;
+            long maxContentFileSize = 10 * 1024 * 1024;
             string uploadedImageUrl = string.Empty;
             string uploadedContentUrl = string.Empty;
 
-            // Handle image upload
             if (command.Image != null)
             {
                 try
@@ -43,7 +50,6 @@ namespace NewLibrary.Application.Services.BookServices
                 }
             }
 
-            // Handle content (EPUB) upload
             if (command.Content != null)
             {
                 try
@@ -56,18 +62,13 @@ namespace NewLibrary.Application.Services.BookServices
                 }
             }
 
-            // Process the EPUB to calculate page count
-            int pageCount;
-            try
+            int pageCount = 0;
+            if (!string.IsNullOrEmpty(uploadedContentUrl))
             {
-                pageCount = await _epubService.GetPageCountAsync(Path.Combine(contentFolder, Path.GetFileName(uploadedContentUrl)));
-            }
-            catch (Exception ex)
-            {
-                throw new Exception("Failed to process EPUB content: " + ex.Message);
+                var contentPath = Path.Combine(contentFolder, Path.GetFileName(uploadedContentUrl));
+                pageCount = await GetTxtPageCountAsync(contentPath);
             }
 
-            // Create a new book entity
             BookEntity newBook = new()
             {
                 Name = command.Name,
@@ -82,7 +83,6 @@ namespace NewLibrary.Application.Services.BookServices
                 TimesRead = 0
             };
 
-            // Save the book entity to the database
             await _bookRepo.AddAsync(newBook);
             await _bookRepo.UnitOfWork.SaveChangesAsync();
 
@@ -163,7 +163,7 @@ namespace NewLibrary.Application.Services.BookServices
                     }
                     catch (Exception ex)
                     {
-                        throw new Exception("Failed to delete existing EPUB content: " + ex.Message);
+                        throw new Exception("Failed to delete existing content: " + ex.Message);
                     }
                 }
 
@@ -173,19 +173,18 @@ namespace NewLibrary.Application.Services.BookServices
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("EPUB upload failed: " + ex.Message);
+                    throw new Exception("Content upload failed: " + ex.Message);
                 }
 
                 int updatedPageCount;
                 try
                 {
-                    updatedPageCount = await _epubService.GetPageCountAsync(Path.Combine(contentFolder, Path.GetFileName(existingBook.Content)));
+                    updatedPageCount = await GetTxtPageCountAsync(Path.Combine(contentFolder, Path.GetFileName(existingBook.Content)));
                 }
                 catch (Exception ex)
                 {
-                    throw new Exception("Failed to process EPUB content: " + ex.Message);
+                    throw new Exception("Failed to process TXT content: " + ex.Message);
                 }
-
                 existingBook.Pages = updatedPageCount;
             }
 
@@ -198,6 +197,64 @@ namespace NewLibrary.Application.Services.BookServices
 
             _bookRepo.Update(existingBook);
             await _bookRepo.UnitOfWork.SaveChangesAsync();
+
+            return true;
+        }
+
+        private async Task UpdateBookRatingAsync(int bookId)
+        {
+            var allRatings = await _userRatingRepo.GetAllAsync();
+            var ratings = allRatings.Where(ur => ur.BookId == bookId).ToList();
+
+            if (!ratings.Any())
+            {
+                return;
+            }
+
+            var averageRating = ratings.Average(ur => ur.Rating);
+
+            var existingBook = await _bookRepo.GetAsync(b => b.Id == bookId)
+                ?? throw new EntityNotFoundException<BookEntity>();
+
+            existingBook.Rating = Math.Round((decimal)averageRating, 2);
+
+            _bookRepo.Update(existingBook);
+            await _bookRepo.UnitOfWork.SaveChangesAsync(CancellationToken.None);
+        }
+
+        public async Task<bool> RateBook(int bookId, int rating)
+        {
+            if (rating < 1 || rating > 5)
+            {
+                throw new ArgumentOutOfRangeException(nameof(rating), "Rating must be between 1 and 5.");
+            }
+
+            var existingBook = await _bookRepo.GetWhere(x => x.Id == bookId)
+                ?? throw new EntityNotFoundException<BookEntity>();
+
+            var userId = _httpContextAccessor.HttpContext?.User.FindFirst("id")?.Value
+                ?? throw new EntityNotFoundException<AppUser>();
+
+            var existingRating = await _userRatingRepo.GetWhere(ur => ur.AppUserId == int.Parse(userId) && ur.BookId == bookId);
+
+            if (existingRating != null)
+            {
+                existingRating.Rating = rating;
+                _userRatingRepo.Update(existingRating);
+            }
+            else
+            {
+                var newRating = new UserRating
+                {
+                    AppUserId = int.Parse(userId),
+                    BookId = bookId,
+                    Rating = rating
+                };
+                await _userRatingRepo.AddAsync(newRating);
+            }
+
+            await _userRatingRepo.UnitOfWork.SaveChangesAsync();
+            await UpdateBookRatingAsync(bookId);
 
             return true;
         }

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using NewLibrary.Application.Commands.BookCommands;
 using NewLibrary.Application.Queries.BookQueries;
 using NewLibrary.Application.Repositories;
@@ -56,6 +57,12 @@ namespace NewLibrary.Api.Controllers
         public async Task<IActionResult> UpdateBook([FromForm] UpdateBookCommand command)
         {
             return Ok(await _bookService.UpdateBook(command));
+        }
+        [HttpPatch]
+        [Authorize(Roles = "member")]
+        public async Task<IActionResult> RateBook([FromForm] int bookId, int rating)
+        {
+            return Ok(await _bookService.RateBook(bookId, rating));
         }
     }
 }

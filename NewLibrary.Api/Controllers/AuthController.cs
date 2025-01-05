@@ -3,7 +3,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.IdentityModel.Tokens;
 using NewLibrary.Application.Commands.UserCommands;
 using NewLibrary.Core.Entities;
+using NewLibrary.Data.DAL;
+using NewLibrary.Infrastructure.Identity;
 using System.IdentityModel.Tokens.Jwt;
+using System.Security.Authentication;
 using System.Security.Claims;
 using System.Text;
 
@@ -16,12 +19,16 @@ namespace NewLibrary.Api.Controllers
         private readonly UserManager<AppUser> _userManager;
         private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IConfiguration _config;
+        private readonly IClaimsManager _claimsManager;
+        private readonly AppDbContext _context;
 
-        public AuthController(UserManager<AppUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager)
+        public AuthController(UserManager<AppUser> userManager, IConfiguration config, RoleManager<IdentityRole> roleManager, IClaimsManager claimsManager, AppDbContext context)
         {
             _userManager = userManager;
             _config = config;
             _roleManager = roleManager;
+            _claimsManager = claimsManager;
+            _context = context;
         }
 
         [HttpPost("register")]
@@ -42,7 +49,7 @@ namespace NewLibrary.Api.Controllers
             return StatusCode(201);
         }
 
-        [HttpGet]
+        [HttpPost]
         public async Task<IActionResult> CreateRole()
         {
             if (!await _roleManager.RoleExistsAsync("member"))
@@ -66,29 +73,53 @@ namespace NewLibrary.Api.Controllers
 
             var handler = new JwtSecurityTokenHandler();
 
-            var ci = new ClaimsIdentity();
+            var claimsIdentity = new ClaimsIdentity();
 
-            ci.AddClaim(new Claim("id", user.Id.ToString()));
-            ci.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
-            ci.AddClaim(new Claim(ClaimTypes.GivenName, user.FullName));
-            ci.AddClaim(new Claim(ClaimTypes.Email, user.Email));
+            claimsIdentity.AddClaim(new Claim("id", user.Id.ToString()));
+            claimsIdentity.AddClaim(new Claim(ClaimTypes.Name, user.UserName));
+            claimsIdentity.AddClaim(new Claim(ClaimTypes.GivenName, user.FullName));
+            claimsIdentity.AddClaim(new Claim(ClaimTypes.Email, user.Email));
             var roles = await _userManager.GetRolesAsync(user);
-            ci.AddClaims(roles.Select(r => new Claim(ClaimTypes.Role, r)).ToList());
+            claimsIdentity.AddClaims(roles.Select(r => new Claim(ClaimTypes.Role, r)).ToList());
 
-            var privateKey = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
+            var privateKey = Encoding.UTF8.GetBytes(_config["JWTSettings:Key"]);
             var credentials = new SigningCredentials(new SymmetricSecurityKey(privateKey), SecurityAlgorithms.HmacSha256);
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 SigningCredentials = credentials,
                 Expires = DateTime.UtcNow.AddHours(1),
-                Subject = ci,
-                Audience = _config.GetSection("Jwt:Audience").Value,
-                Issuer = _config.GetSection("Jwt:Issuer").Value,
+                Subject = claimsIdentity,
+                Audience = _config.GetSection("JWTSettings:Audience").Value,
+                Issuer = _config.GetSection("JWTSettings:Issuer").Value,
             };
             var token = handler.CreateToken(tokenDescriptor);
 
-
             return Ok(new { token = handler.WriteToken(token) });
         }
+        [HttpGet("current-user")]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            try
+            {
+                int currentUserId = _claimsManager.GetCurrentUserId();
+                var user = await _context.Users.FindAsync(currentUserId);
+
+                if (user == null)
+                {
+                    return NotFound(new { Message = "User not found" });
+                }
+
+                return Ok(user);
+            }
+            catch (AuthenticationException ex)
+            {
+                return Unauthorized(ex.Message);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { Message = "An unexpected error occurred", Details = ex.Message });
+            }
+        }
+
     }
 }

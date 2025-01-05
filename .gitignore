@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+/NewLibrary.Api/wwwroot/contents/285da12f-e362-47db-b31b-ca104908e836.txt
+/NewLibrary.Api/wwwroot

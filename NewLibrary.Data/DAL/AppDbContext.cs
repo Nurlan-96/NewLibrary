@@ -19,6 +19,7 @@ namespace NewLibrary.Data.DAL
         public DbSet<BookEntity> Books { get; set; }
         public DbSet<AuthorEntity> Authors { get; set; }
         public DbSet<AppUser> Users { get; set; }
+        public DbSet<UserRating> UserRatings { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {

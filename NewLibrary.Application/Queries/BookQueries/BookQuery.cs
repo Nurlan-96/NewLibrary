@@ -28,28 +28,21 @@ namespace NewLibrary.Application.Queries.BookQueries
             return data;
         }
 
-        public async Task<List<BookEntity>> GetBooksByAuthorAsync(int authorId, int page, int size)
+        public async Task<Pagination<BookResponse>> GetBooksByAuthorAsync(int id, int page, int size)
         {
-            if (page <= 0 || size <= 0)
-            {
-                throw new ArgumentException("Page and size must be greater than zero.");
-            }
-            int skip = (page - 1) * size;
-            var books = await _context.Books.Where(b => b.AuthorId == authorId)
-                .OrderBy(b => b.TimesRead)
-                .Skip(skip)
-                .Take(size)
-                .ToListAsync();
-            return books;
+            var books = await _context.Books
+           .Include(b => b.Author)
+           .Where(b => b.AuthorId == id)
+           .OrderBy(b => b.TimesRead)
+           .ToListAsync();
+
+            var data = _mapper.Map<List<BookResponse>>(books);
+            var paginated = new Pagination<BookResponse>(data, page, size);
+            return paginated;
         }
 
-        public async Task<List<BookEntity>> GetBooksByGenreAsync(int genreId, int page, int size)
+        public async Task<Pagination<BookResponse>> GetBooksByGenreAsync(int genreId, int page, int size)
         {
-            if (page <= 0 || size <= 0)
-            {
-                throw new ArgumentException("Page and size must be greater than zero.");
-            }
-
             if (!Enum.IsDefined(typeof(GenreEnum), genreId))
             {
                 throw new ArgumentException($"Invalid category ID: {genreId}");
@@ -58,13 +51,15 @@ namespace NewLibrary.Application.Queries.BookQueries
             int skip = (page - 1) * size;
             var books = await _context.Books.Where(b => b.Genre.Any(g => g == (GenreEnum)genreId))
                 .OrderBy(b => b.TimesRead)
-                .Skip(skip)
-                .Take(size)
                 .ToListAsync();
-            return books;
+
+            var data = _mapper.Map<List<BookResponse>>(books);
+            var paginated = new Pagination<BookResponse>(data, page, size);
+
+            return paginated;
         }
 
-        
+
         public async Task<List<BookEntity>> GetBooksByPopularityAsync(int page, int size)
         {
             if (page <= 0 || size <= 0)
